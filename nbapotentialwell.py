@@ -3,6 +3,7 @@
 #and estimate potential energy wells
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.library.parameters import Season
 from nba_api.stats.library.parameters import SeasonType
@@ -17,7 +18,7 @@ class NBAPotentialWell:
         self.team_id = [t['id'] for t in nba_teams if t['full_name'] == ('')]
         self.season = season
         self.game_ids = self._get_game_ids()
-        self.pbp = self._get_play_by_play()
+        #self.pbp = self._get_play_by_play()
     
     def _get_game_ids(self):
         games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
@@ -25,15 +26,7 @@ class NBAPotentialWell:
                             season_type_nullable=SeasonType.regular)
         return [g ['GAME_ID'] for g in games.get_normalized_dict()['LeagueGameFinderResults']]
         
-    def _get_play_by_play(self,game_id,format=True):
-        """Loop through all plays in a game and return a list of plays"""
-        #play_d = {}
-        pbp = playbyplay.PlayByPlay(game_id=game_id)
-        plays = pbp.get_data_frames()[0]
-        score_id = plays['EVENTMSGTYPE'].isin([1,3]) # 1 for field goals, 3 for free throws
-        #play_data = plays.get_normalized_dict()['LeagueGameFinderResults']
-        #play_d[g_id] = plays['SCORE']
-        return plays.loc[score_id, ['PERIOD', 'PCTIMESTRING', 'SCORE']].reset_index(drop=True)
+    
     
     def _format_time(self):
         """Convert a time string in the format 'MM:SS' to seconds accounting for the period"""
@@ -45,7 +38,65 @@ class NBAPotentialWell:
         df.loc[:,'TIME_S'] = df.loc[:,'TIME_ELAPSED'].dt.total_seconds()
         return df
 
+class NBAGameProcessing():
+    def __init__(self, game_id,max_differential=30,lag=30):
+        self.game_id = game_id
+        self.pbp = self._get_play_by_play()
+        self.bins = np.arange(-max_differential, max_differential + 1, 1)
+        self.lag = int(lag/0.1) #lag for margin transition
+        self.mat = np.zeros((len(self.bins)-1, len(self.bins)-1))
+    
+    def _get_play_by_play(self,format=True):
+        """Loop through all plays in a game and return a list of plays"""
+        #play_d = {}
+        pbp = playbyplay.PlayByPlay(game_id=self.game_id)
+        plays = pbp.get_data_frames()[0]
+        score_id = plays['EVENTMSGTYPE'].isin([1,3]) # 1 for field goals, 3 for free throws
+        #play_data = plays.get_normalized_dict()['LeagueGameFinderResults']
+        #play_d[g_id] = plays['SCORE']
+        return _format_time(plays.loc[score_id, ['PERIOD', 'PCTIMESTRING', 'SCORE']].reset_index(drop=True))   
+
+    
+    def create_transition_matrix(self):
+        """Create a transition matrix from the play-by-play data"""
+        # This method would implement the logic to create a transition matrix
+        # based on the play-by-play data.
+        df = self.pbp.copy()
+        margin = df['SCORE_MARGIN'].values[0:-self.lag]
+        margin_shift = df['SCORE_MARGIN'].values[self.lag:]
+        margin_corr = np.column_stack((margin, margin_shift))
+        np.add.at(self.mat,(margin,margin_shift),1)
+        plt.scatter(margin, margin_shift)
+        plt.show()
+    
+    def plot_transition_matrix(self):
+        """Plot the transition matrix"""
+        # This method would implement the logic to plot the transition matrix.
+        # For example, using matplotlib or seaborn to visualize the matrix.
+        plt.imshow(self.mat, cmap='hot')
+        plt.colorbar()
+        plt.show()
+
+def _format_time(df):
+    """Convert a time string in the format 'MM:SS' to seconds accounting for the period"""
+    #df = self.pbp.copy()
+    df['TIME_ELAPSED'] = pd.to_timedelta('00:' + (df['PERIOD']*12).astype('str') + ':00') \
+        - pd.to_timedelta('00:' + df['PCTIMESTRING'])
+    df.loc[:,'TIME_ELAPSED'] = pd.to_timedelta('00:' + (df.loc[:,'PERIOD']*12).astype('str') + ':00')\
+        - pd.to_timedelta('00:' + df.loc[:,'PCTIMESTRING']) 
+    df.loc[:,'TIME_S'] = df.loc[:,'TIME_ELAPSED'].dt.total_seconds()
+    df_full_time = pd.DataFrame(data=np.arange(0,2880,0.1),columns=['TIME_S'])
+    df_full_time = df_full_time.set_index('TIME_S').join(df[['TIME_S','SCORE']].set_index('TIME_S'),how='left',lsuffix='_FULL',rsuffix='')
+    df_full_time.loc[0,['SCORE']] = '0 - 0'
+    df_full_time = df_full_time.ffill()
+    df_full_time['SCORE_HOME'] = df_full_time['SCORE'].str.split(" - ").str[1].astype(int)
+    df_full_time['SCORE_AWAY'] = df_full_time['SCORE'].str.split(" - ").str[0].astype(int)
+    df_full_time['SCORE_MARGIN'] = df_full_time['SCORE_HOME'] - df_full_time['SCORE_AWAY']
+    return df_full_time
+
 if __name__ == "__main__":
     npw = NBAPotentialWell('Chicago Bulls','2023-24')
-   
-    print(npw._get_play_by_play('2042000211')._format_time())
+    games = npw._get_game_ids()
+    g = NBAGameProcessing(games[0])
+    g.create_transition_matrix()
+    #g.plot_transition_matrix()
