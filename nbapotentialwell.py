@@ -24,10 +24,8 @@ class NBAPotentialWell:
         games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
                             season_nullable=self.season,
                             season_type_nullable=SeasonType.regular)
-        return [g ['GAME_ID'] for g in games.get_normalized_dict()['LeagueGameFinderResults']]
+        return [g ['GAME_ID'] for g in games.get_normalized_dict()['LeagueGameFinderResults']]  
         
-    
-    
     def _format_time(self):
         """Convert a time string in the format 'MM:SS' to seconds accounting for the period"""
         df = self.pbp.copy()
@@ -42,8 +40,9 @@ class NBAGameProcessing():
     def __init__(self, game_id,max_differential=30,lag=30):
         self.game_id = game_id
         self.pbp = self._get_play_by_play()
+        self.max_differential = max_differential
         self.bins = np.arange(-max_differential, max_differential + 1, 1)
-        self.lag = int(lag/0.1) #lag for margin transition
+        #self.lag = int(lag/0.1) #lag for margin transition
         self.mat = np.zeros((len(self.bins)-1, len(self.bins)-1))
     
     def _get_play_by_play(self,format=True):
@@ -57,16 +56,27 @@ class NBAGameProcessing():
         return _format_time(plays.loc[score_id, ['PERIOD', 'PCTIMESTRING', 'SCORE']].reset_index(drop=True))   
 
     
-    def create_transition_matrix(self):
+    def create_transition_matrix(self,lag=30):
         """Create a transition matrix from the play-by-play data"""
         # This method would implement the logic to create a transition matrix
         # based on the play-by-play data.
         df = self.pbp.copy()
-        margin = df['SCORE_MARGIN'].values[0:-self.lag]
-        margin_shift = df['SCORE_MARGIN'].values[self.lag:]
-        margin_corr = np.column_stack((margin, margin_shift))
+        lag_int = int(lag/0.1)  # Convert lag from seconds to number of rows
+        margin = df['SCORE_MARGIN'].values[0:-lag_int] + self.max_differential
+        margin_shift = df['SCORE_MARGIN'].values[lag_int:] + self.max_differential
+        #margin_corr = np.column_stack((margin, margin_shift))
         np.add.at(self.mat,(margin,margin_shift),1)
-        plt.scatter(margin, margin_shift)
+        #plt.scatter(margin, margin_shift)
+        #plt.show()
+        
+    def plot_score_margin(self):
+        """Plot the score margin over time"""
+        # This method would implement the logic to plot the score margin.
+        # For example, using matplotlib to visualize the score margin over time.
+        plt.plot(self.pbp.index, self.pbp['SCORE_MARGIN'])
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Score Margin')
+        plt.title('Score Margin Over Time')
         plt.show()
     
     def plot_transition_matrix(self):
@@ -98,5 +108,7 @@ if __name__ == "__main__":
     npw = NBAPotentialWell('Chicago Bulls','2023-24')
     games = npw._get_game_ids()
     g = NBAGameProcessing(games[0])
-    g.create_transition_matrix()
-    #g.plot_transition_matrix()
+    g.create_transition_matrix(lag=20)
+    g.plot_score_margin()
+    g.plot_transition_matrix()
+    print(np.sum(g.mat,axis=0))
