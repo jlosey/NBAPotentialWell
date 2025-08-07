@@ -111,4 +111,4 @@ if __name__ == "__main__":
     g.create_transition_matrix(lag=20)
     g.plot_score_margin()
     g.plot_transition_matrix()
-    print(np.sum(g.mat,axis=0))
+    #print(np.sum(g.mat,axis=0))
