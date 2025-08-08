@@ -22,7 +22,8 @@ class NBA_Season():
                                                   season_type_nullable=self.season_type)
         return [g['GAME_ID'] for g in games.get_normalized_dict()['LeagueGameFinderResults']]
     
-if __name__ == "__main__":
+if __name__ == "__main__":y
+
     nba_season = NBA_Season(season=2022)
     print("Teams:", nba_season._get_teams())
     print("Players:", nba_season._get_players())
