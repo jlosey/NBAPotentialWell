@@ -26,18 +26,21 @@ con.execute("CREATE TABLE IF NOT EXISTS teams (ID INTEGER, full_name VARCHAR, ab
              (team['id'], team['full_name'], team['abbreviation'], team['nickname'],
               team['city'], team['state'])) for team in teams]
 
-con.execute("CREATE TABLE IF NOT EXISTS games (GAME_ID INTEGER PRIMARY KEY, SEASON_ID INTEGER, TEAM_ID_HOME INTEGER, TEAM_ID_AWAY INTEGER, GAME_DATE DATE, MATCHUP VARCHAR, PTS_HOME INTEGER, PTS_AWAY INTEGER, MIN_HOME VARCHAR, MIN_AWAY VARCHAR)")
-for gid in nba22.game_ids:
-    games = leaguegamefinder.LeagueGameFinder(team_id_nullable=gid,
-                            season_nullable=nba22.season,
-                            season_type_nullable=nba22.season_type)
-    games_data = games.get_data_frames()[0]
-    home_data = games_data.loc[games_data['MATCHUP'].str.contains('vs'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
-    away_data = games_data.loc[games_data['MATCHUP'].str.contains('@'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
-    merged_data = pd.merge(right=home_data, left=away_data, right_on='GAME_ID', left_on='GAME_ID', suffixes=('_HOME', '_AWAY'))
-    for n,row in merged_data.iterrows():
-        con.execute("INSERT INTO games VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (row['GAME_ID'], row['SEASON_ID'], row['TEAM_ID_HOME'], row['TEAM_ID_AWAY'],
-                     row['GAME_DATE'], row['MATCHUP_HOME'], row['PTS_HOME'], row['PTS_AWAY'],
-                     row['MIN_HOME'], row['MIN_AWAY']))
+con.execute("""CREATE TABLE IF NOT EXISTS games (GAME_ID INTEGER PRIMARY KEY, 
+            SEASON_ID INTEGER, TEAM_ID_HOME INTEGER, TEAM_ID_AWAY INTEGER, 
+            GAME_DATE DATE, MATCHUP VARCHAR, PTS_HOME INTEGER, PTS_AWAY INTEGER, 
+            MIN_HOME VARCHAR, MIN_AWAY VARCHAR)""")
+#for gid in nba22.game_ids:
+games = leaguegamefinder.LeagueGameFinder(#team_id_nullable=gid,
+                        season_nullable=nba22.season,
+                        season_type_nullable=nba22.season_type)
+games_data = games.get_data_frames()[0]
+home_data = games_data.loc[games_data['MATCHUP'].str.contains('vs'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
+away_data = games_data.loc[games_data['MATCHUP'].str.contains('@'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
+merged_data = pd.merge(right=home_data, left=away_data, right_on='GAME_ID', left_on='GAME_ID', suffixes=('_HOME', '_AWAY'))
+for n,row in merged_data.iterrows():
+    con.execute("INSERT INTO games VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (row['GAME_ID'], row['SEASON_ID_HOME'], row['TEAM_ID_HOME'], row['TEAM_ID_AWAY'],
+                    row['GAME_DATE_HOME'], row['MATCHUP_HOME'], row['PTS_HOME'], row['PTS_AWAY'],
+                    row['MIN_HOME'], row['MIN_AWAY']))
 
