@@ -4,6 +4,7 @@ import pandas as pd
 from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.endpoints import playbyplay
 from tqdm import tqdm
+from numpy import nan
 
 season = '2022-23'
 
@@ -41,21 +42,53 @@ home_data = games_data.loc[games_data['MATCHUP'].str.contains('vs'), ['SEASON_ID
 away_data = games_data.loc[games_data['MATCHUP'].str.contains('@'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
 merged_data = pd.merge(right=home_data, left=away_data, right_on='GAME_ID', left_on='GAME_ID', suffixes=('_HOME', '_AWAY'))
 for n,row in merged_data.iterrows():
-    con.execute("INSERT INTO games VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    try :
+        con.execute("INSERT INTO games VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (row['GAME_ID'], row['SEASON_ID_HOME'], row['TEAM_ID_HOME'], row['TEAM_ID_AWAY'],
                     row['GAME_DATE_HOME'], row['MATCHUP_HOME'], row['PTS_HOME'], row['PTS_AWAY'],
                     row['MIN_HOME'], row['MIN_AWAY']))
+    except duckdb.ConstraintException as e:
+        print(f"Error inserting game {row['GAME_ID']}: {e}")
+        continue
 
 ## Play-by-play data
-con.execute("""CREATE TABLE IF NOT EXISTS play_by_play (GAME_ID INTEGER PRIMARY KEY, 
+con.execute("""CREATE TABLE IF NOT EXISTS play_by_play (GAME_ID INTEGER, 
             EVENTNUM INTEGER, EVENTMSGTYPE INTEGER, EVENTMSGACTIONTYPE INTEGER, PERIOD INTEGER,
        WCTIMESTRING VARCHAR, PCTIMESTRING VARCHAR, HOMEDESCRIPTION VARCHAR, NEUTRALDESCRIPTION VARCHAR,
        VISITORDESCRIPTION VARCHAR, SCORE VARCHAR, SCOREMARGIN INTEGER)""")
 for gid in tqdm(games_data['GAME_ID'].unique()):
     pbp = playbyplay.PlayByPlay(game_id=gid)
     pbp_df = pbp.get_data_frames()[0]
+    pbp_df['SCOREMARGIN'] = pbp_df['SCOREMARGIN'].replace('None',nan)
+    pbp_df.loc[0, 'SCOREMARGIN'] = 0
+    pbp_df.loc[0, 'SCORE'] = '0-0'
+    pbp_df['SCOREMARGIN'] = pbp_df['SCOREMARGIN'].ffill()
+    pbp_df['HOMEDESCRIPTION'] = pbp_df['HOMEDESCRIPTION'].replace('"','\"').replace("'","\'")
+    pbp_df['VISITORDESCRIPTION'] = pbp_df['VISITORDESCRIPTION'].replace('"','\"').replace("'","\'")
+
     if not pbp_df.empty:
-        pbp_df.to_sql('play_by_play', con, if_exists='append', index=False)
+    #    pbp_df.to_sql('play_by_play', con, if_exists='append', index=False)
+        #insert_vals = ""
+        #for n,row in pbp_df.iterrows():
+            #insert_vals += f"""({row['GAME_ID']}, {row['EVENTNUM']}, {row['EVENTMSGTYPE']}, {row['EVENTMSGACTIONTYPE']},
+            #              {row['PERIOD']}, '{row['WCTIMESTRING']}', '{row['PCTIMESTRING']}',
+            #              '{row['HOMEDESCRIPTION']}', '{row['NEUTRALDESCRIPTION']}',
+            #              '{row['VISITORDESCRIPTION']}', '{row['SCORE']}', {row['SCOREMARGIN']}),"""
+        pbp_values = [[row['GAME_ID'], row['EVENTNUM'], row['EVENTMSGTYPE'], row['EVENTMSGACTIONTYPE'],
+                          row['PERIOD'], row['WCTIMESTRING'], row['PCTIMESTRING'],
+                          row['HOMEDESCRIPTION'], row['NEUTRALDESCRIPTION'],
+                          row['VISITORDESCRIPTION'], row['SCORE'], row['SCOREMARGIN']] for n,row in pbp_df.iterrows()]
+        con.executemany("INSERT INTO play_by_play VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,);",pbp_values) 
+                #(pbp_df['GAME_ID'].astype('int').values, 
+                # pbp_df['EVENTNUM'].astype('int').values, 
+                # pbp_df['EVENTMSGTYPE'].astype('int').values, 
+                # pbp_df['EVENTMSGACTIONTYPE'].astype('int').values,
+                # pbp_df['PERIOD'].values, pbp_df['WCTIMESTRING'].values, 
+                # pbp_df['PCTIMESTRING'].values,
+                # pbp_df['HOMEDESCRIPTION'].values, 
+                # pbp_df['NEUTRALDESCRIPTION'].values,
+                # pbp_df['VISITORDESCRIPTION'].values, pbp_df['SCORE'].values, 
+                # pbp_df['SCOREMARGIN'].values))
 con.execute("CREATE INDEX IF NOT EXISTS idx_games_game_id ON games (GAME_ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_play_by_play_game_id ON play_by_play (GAME_ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_teams_id ON teams (ID)")
