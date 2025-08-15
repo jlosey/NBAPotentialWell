@@ -52,10 +52,20 @@ for n,row in merged_data.iterrows():
         continue
 
 ## Play-by-play data
-con.execute("""CREATE TABLE IF NOT EXISTS play_by_play (GAME_ID INTEGER, 
-            EVENTNUM INTEGER, EVENTMSGTYPE INTEGER, EVENTMSGACTIONTYPE INTEGER, PERIOD INTEGER,
-       WCTIMESTRING VARCHAR, PCTIMESTRING VARCHAR, HOMEDESCRIPTION VARCHAR, NEUTRALDESCRIPTION VARCHAR,
-       VISITORDESCRIPTION VARCHAR, SCORE VARCHAR, SCOREMARGIN INTEGER)""")
+con.execute("""CREATE TABLE IF NOT EXISTS play_by_play (
+            GAME_ID INTEGER REFERENCES games(GAME_ID), 
+            EVENTNUM INTEGER, 
+            EVENTMSGTYPE INTEGER, 
+            EVENTMSGACTIONTYPE INTEGER, 
+            PERIOD INTEGER,
+            WCTIMESTRING VARCHAR, 
+            PCTIMESTRING VARCHAR, 
+            HOMEDESCRIPTION VARCHAR, 
+            NEUTRALDESCRIPTION VARCHAR,
+            VISITORDESCRIPTION VARCHAR, 
+            SCORE VARCHAR, 
+            SCOREMARGIN INTEGER, 
+            PRIMARY KEY (GAME_ID, EVENTNUM))""")
 games_data_existing = con.execute("SELECT GAME_ID FROM play_by_play").fetchnumpy()
 #games_data_existing = [g[0] for g in games_data_existing]
 games_data_remaining = games_data.loc[~games_data['GAME_ID'].isin(games_data_existing['GAME_ID'])]
