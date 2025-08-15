@@ -56,12 +56,20 @@ con.execute("""CREATE TABLE IF NOT EXISTS play_by_play (GAME_ID INTEGER,
             EVENTNUM INTEGER, EVENTMSGTYPE INTEGER, EVENTMSGACTIONTYPE INTEGER, PERIOD INTEGER,
        WCTIMESTRING VARCHAR, PCTIMESTRING VARCHAR, HOMEDESCRIPTION VARCHAR, NEUTRALDESCRIPTION VARCHAR,
        VISITORDESCRIPTION VARCHAR, SCORE VARCHAR, SCOREMARGIN INTEGER)""")
-for gid in tqdm(games_data['GAME_ID'].unique()):
+games_data_existing = con.execute("SELECT GAME_ID FROM play_by_play").fetchnumpy()
+#games_data_existing = [g[0] for g in games_data_existing]
+games_data_remaining = games_data.loc[~games_data['GAME_ID'].isin(games_data_existing['GAME_ID'])]
+if games_data_existing['GAME_ID'].size > 0:
+    print(f"Games already exist in play-by-play data, fetching remaining {len(games_data_remaining)} games.")
+else:
+    print("No games found in play-by-play data, fetching all for season.")
+for gid in tqdm(games_data_remaining['GAME_ID'].unique()):
     pbp = playbyplay.PlayByPlay(game_id=gid)
     pbp_df = pbp.get_data_frames()[0]
     pbp_df['SCOREMARGIN'] = pbp_df['SCOREMARGIN'].replace('None',nan)
     pbp_df.loc[0, 'SCOREMARGIN'] = 0
     pbp_df.loc[0, 'SCORE'] = '0-0'
+    pbp_df.loc[pbp_df['SCOREMARGIN'] == 'TIE','SCOREMARGIN'] = 0
     pbp_df['SCOREMARGIN'] = pbp_df['SCOREMARGIN'].ffill()
     pbp_df['HOMEDESCRIPTION'] = pbp_df['HOMEDESCRIPTION'].replace('"','\"').replace("'","\'")
     pbp_df['VISITORDESCRIPTION'] = pbp_df['VISITORDESCRIPTION'].replace('"','\"').replace("'","\'")
