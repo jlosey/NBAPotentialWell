@@ -67,8 +67,8 @@ con.execute("""CREATE TABLE IF NOT EXISTS play_by_play (
             SCOREMARGIN INTEGER, 
             PRIMARY KEY (GAME_ID, EVENTNUM))""")
 games_data_existing = con.execute("SELECT GAME_ID FROM play_by_play").fetchnumpy()
-#games_data_existing = [g[0] for g in games_data_existing]
-games_data_remaining = games_data.loc[~games_data['GAME_ID'].isin(games_data_existing['GAME_ID'])]
+#games_data_existing = [g[0] for g in games_data_existing]'
+games_data_remaining = games_data[~games_data['GAME_ID'].astype('int').isin(games_data_existing['GAME_ID'])]
 if games_data_existing['GAME_ID'].size > 0:
     print(f"Games already exist in play-by-play data, fetching remaining {len(games_data_remaining)} games.")
 else:
@@ -96,17 +96,13 @@ for gid in tqdm(games_data_remaining['GAME_ID'].unique()):
                           row['PERIOD'], row['WCTIMESTRING'], row['PCTIMESTRING'],
                           row['HOMEDESCRIPTION'], row['NEUTRALDESCRIPTION'],
                           row['VISITORDESCRIPTION'], row['SCORE'], row['SCOREMARGIN']] for n,row in pbp_df.iterrows()]
-        con.executemany("INSERT INTO play_by_play VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,);",pbp_values) 
-                #(pbp_df['GAME_ID'].astype('int').values, 
-                # pbp_df['EVENTNUM'].astype('int').values, 
-                # pbp_df['EVENTMSGTYPE'].astype('int').values, 
-                # pbp_df['EVENTMSGACTIONTYPE'].astype('int').values,
-                # pbp_df['PERIOD'].values, pbp_df['WCTIMESTRING'].values, 
-                # pbp_df['PCTIMESTRING'].values,
-                # pbp_df['HOMEDESCRIPTION'].values, 
-                # pbp_df['NEUTRALDESCRIPTION'].values,
-                # pbp_df['VISITORDESCRIPTION'].values, pbp_df['SCORE'].values, 
-                # pbp_df['SCOREMARGIN'].values))
+        try:
+            con.executemany("INSERT INTO play_by_play VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,);",pbp_values) 
+        except duckdb.ConstraintException as e:
+            print(f"Error inserting play-by-play data for game {gid}: {e}")
+            continue
+# Create indexes for faster querying
+con.execute("CREATE INDEX IF NOT EXISTS idx_seasons_id ON seasons (ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_games_game_id ON games (GAME_ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_play_by_play_game_id ON play_by_play (GAME_ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_teams_id ON teams (ID)")
