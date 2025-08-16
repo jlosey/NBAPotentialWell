@@ -81,15 +81,15 @@ class NBAGameProcessing():
         """Plot the transition matrix"""
         # This method would implement the logic to plot the transition matrix.
         # For example, using matplotlib or seaborn to visualize the matrix.
-        fig = plt.figure(figsize=(10,8))
+        fig = plt.figure()
         ax = fig.add_subplot(111)
         m = ax.imshow(self.mat, cmap='hot_r')
         cbar = plt.colorbar(m)
         ticks = ax.get_xticks()
         ax.set_xticks(ticks)
         ax.set_yticks(ticks)
-        ax.set_xticklabels(ticks-self.max_differential)
-        ax.set_yticklabels(ticks-self.max_differential)
+        ax.set_xticklabels([int(t-self.max_differential) for t in ticks])
+        ax.set_yticklabels([int(t-self.max_differential) for t in ticks])
         plt.show()
 
 def _format_time(df):
