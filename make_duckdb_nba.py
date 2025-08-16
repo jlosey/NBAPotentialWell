@@ -1,3 +1,4 @@
+import sys
 import duckdb
 from dbnba.nba_db import NBA_Season
 import pandas as pd
@@ -6,7 +7,12 @@ from nba_api.stats.endpoints import playbyplay
 from tqdm import tqdm
 from numpy import nan
 
-season = '2022-23'
+argv = sys.argv
+if len(argv) > 1:
+    season = argv[1]
+else:
+    print("No season provided, using default 2022-23")
+    season = '2022-23'
 
 nba22 = NBA_Season(season=season)
 
@@ -17,22 +23,34 @@ con = duckdb.connect(database='nba.db', read_only=False)
 #con.execute('CREATE SEQUENCE IF NOT EXISTS season_seq START 1;')
 # Create the seasons table if it doesn't exist and populate with season provided
 con.execute("CREATE TABLE IF NOT EXISTS seasons (ID INTEGER PRIMARY KEY, season VARCHAR, season_type VARCHAR)")
-if con.execute("SELECT COUNT(*) FROM seasons").fetchone()[0] == 0:
+if con.execute("SHOW TABLES").fetchall()[0] == 0:
     con.execute("INSERT INTO seasons VALUES (?, ?, ?)", (int('2'+nba22.season[:4]),nba22.season, nba22.season_type))
 else:
     print("Season already exists in the database, skipping insert.")
 #con.execute("INSERT INTO seasons VALUES (?, ?)", (nba22.season, nba22.season_type))
 
 # Create the teams table if it doesn't exist and populate with teams
-con.execute("CREATE TABLE IF NOT EXISTS teams (ID INTEGER, full_name VARCHAR, abbreviation VARCHAR, nickname VARCHAR, city VARCHAR, state VARCHAR)")
-[con.execute("INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?)",
+con.execute("CREATE TABLE IF NOT EXISTS teams (TEAM_ID INTEGER PRIMARY KEY, FULL_NAME VARCHAR, ABBR VARCHAR, NICKNAME VARCHAR, CITY VARCHAR, STATE VARCHAR)")
+teams_existing = con.execute("SELECT TEAM_ID FROM teams").fetchall()
+print(teams_existing)
+if len(teams_existing) == 0:
+    [con.execute("INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?)",
              (team['id'], team['full_name'], team['abbreviation'], team['nickname'],
               team['city'], team['state'])) for team in teams]
+else:
+    print("TEAMS table already exists, skipping insert.")
 
 con.execute("""CREATE TABLE IF NOT EXISTS games (GAME_ID INTEGER PRIMARY KEY, 
-            SEASON_ID INTEGER, TEAM_ID_HOME INTEGER, TEAM_ID_AWAY INTEGER, 
-            GAME_DATE DATE, MATCHUP VARCHAR, PTS_HOME INTEGER, PTS_AWAY INTEGER, 
-            MIN_HOME VARCHAR, MIN_AWAY VARCHAR)""")
+            SEASON_ID INTEGER REFERENCES seasons(ID), 
+            TEAM_ID_HOME INTEGER REFERENCES teams(TEAM_ID), 
+            TEAM_ID_AWAY INTEGER REFERENCES teams(TEAM_ID), 
+            GAME_DATE DATE, 
+            MATCHUP VARCHAR, 
+            PTS_HOME INTEGER, 
+            PTS_AWAY INTEGER, 
+            MIN_HOME VARCHAR, 
+            MIN_AWAY VARCHAR)
+            """)
 #for gid in nba22.game_ids:
 games = leaguegamefinder.LeagueGameFinder(#team_id_nullable=gid,
                         season_nullable=nba22.season,
@@ -105,5 +123,5 @@ for gid in tqdm(games_data_remaining['GAME_ID'].unique()):
 con.execute("CREATE INDEX IF NOT EXISTS idx_seasons_id ON seasons (ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_games_game_id ON games (GAME_ID)")
 con.execute("CREATE INDEX IF NOT EXISTS idx_play_by_play_game_id ON play_by_play (GAME_ID)")
-con.execute("CREATE INDEX IF NOT EXISTS idx_teams_id ON teams (ID)")
+con.execute("CREATE INDEX IF NOT EXISTS idx_teams_id ON teams (TEAM_ID)")
 
