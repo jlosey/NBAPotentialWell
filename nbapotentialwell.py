@@ -9,13 +9,16 @@ from nba_api.stats.library.parameters import Season
 from nba_api.stats.library.parameters import SeasonType
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import playbyplay
-
-nba_teams = teams.get_teams()
+import duckdb
+con = duckdb.connect(database='nba.db', read_only=False)
+nba_teams = con.execute("SELECT * FROM teams;").df()
 
 class NBAPotentialWell:
     def __init__(self,team_name,season):
+        assert nba_teams['FULL_NAME'].str.fullmatch(team_name).any(), "Team not found in database"
         self.team_name = team_name
-        self.team_id = [t['id'] for t in nba_teams if t['full_name'] == ('')]
+        self.team_id = nba_teams.loc[nba_teams['FULL_NAME'] == team_name, 'TEAM_ID'].values[0]
+        # Consider and assertion for season here
         self.season = season
         self.game_ids = self._get_game_ids()
         #self.pbp = self._get_play_by_play()
@@ -38,22 +41,24 @@ class NBAPotentialWell:
 
 class NBAGameProcessing():
     def __init__(self, game_id,max_differential=30,lag=30):
-        self.game_id = game_id
+        self.game_id = int(game_id)
         self.pbp = self._get_play_by_play()
         self.max_differential = max_differential
         self.bins = np.arange(-max_differential, max_differential + 1, 1)
         #self.lag = int(lag/0.1) #lag for margin transition
         self.mat = np.zeros((len(self.bins)-1, len(self.bins)-1))
+        
     
     def _get_play_by_play(self,format=True):
         """Loop through all plays in a game and return a list of plays"""
         #play_d = {}
-        pbp = playbyplay.PlayByPlay(game_id=self.game_id)
-        plays = pbp.get_data_frames()[0]
-        score_id = plays['EVENTMSGTYPE'].isin([1,3]) # 1 for field goals, 3 for free throws
+        pbp = con.execute("SELECT PERIOD, PCTIMESTRING, SCORE, SCOREMARGIN, EVENTMSGTYPE FROM play_by_play WHERE GAME_ID = ?"
+                          , [self.game_id]).df()
+        #plays = pbp.get_data_frames()[0]
+        score_id = pbp['EVENTMSGTYPE'].isin([1,3]) # 1 for field goals, 3 for free throws
         #play_data = plays.get_normalized_dict()['LeagueGameFinderResults']
         #play_d[g_id] = plays['SCORE']
-        return _format_time(plays.loc[score_id, ['PERIOD', 'PCTIMESTRING', 'SCORE']].reset_index(drop=True))   
+        return _format_time(pbp.loc[score_id, ['PERIOD', 'PCTIMESTRING', 'SCORE', 'SCOREMARGIN']].reset_index(drop=True))   
 
     
     def create_transition_matrix(self,lag=30):
@@ -62,8 +67,8 @@ class NBAGameProcessing():
         # based on the play-by-play data.
         df = self.pbp.copy()
         lag_int = int(lag/0.1)  # Convert lag from seconds to number of rows
-        margin = df['SCORE_MARGIN'].values[0:-lag_int] + self.max_differential
-        margin_shift = df['SCORE_MARGIN'].values[lag_int:] + self.max_differential
+        margin = df['SCOREMARGIN'].astype(int).values[0:-lag_int] + self.max_differential
+        margin_shift = df['SCOREMARGIN'].astype(int).values[lag_int:] + self.max_differential
         #margin_corr = np.column_stack((margin, margin_shift))
         np.add.at(self.mat,(margin,margin_shift),1)
         #plt.scatter(margin, margin_shift)
@@ -73,7 +78,7 @@ class NBAGameProcessing():
         """Plot the score margin over time"""
         # This method would implement the logic to plot the score margin.
         # For example, using matplotlib to visualize the score margin over time.
-        plt.plot(self.pbp.index, self.pbp['SCORE_MARGIN'])
+        plt.plot(self.pbp.index, self.pbp['SCOREMARGIN'])
         plt.xlabel('Time (seconds)')
         plt.ylabel('Score Margin')
         plt.title('Score Margin Over Time')
@@ -96,16 +101,17 @@ def _format_time(df):
         - pd.to_timedelta('00:' + df.loc[:,'PCTIMESTRING']) 
     df.loc[:,'TIME_S'] = df.loc[:,'TIME_ELAPSED'].dt.total_seconds()
     df_full_time = pd.DataFrame(data=np.arange(0,2880,0.1),columns=['TIME_S'])
-    df_full_time = df_full_time.set_index('TIME_S').join(df[['TIME_S','SCORE']].set_index('TIME_S'),how='left',lsuffix='_FULL',rsuffix='')
+    df_full_time = df_full_time.set_index('TIME_S').join(df[['TIME_S','SCORE','SCOREMARGIN']].set_index('TIME_S'),how='left',lsuffix='_FULL',rsuffix='')
     df_full_time.loc[0,['SCORE']] = '0 - 0'
+    df_full_time.loc[0,['SCOREMARGIN']] = 0
     df_full_time = df_full_time.ffill()
     df_full_time['SCORE_HOME'] = df_full_time['SCORE'].str.split(" - ").str[1].astype(int)
     df_full_time['SCORE_AWAY'] = df_full_time['SCORE'].str.split(" - ").str[0].astype(int)
-    df_full_time['SCORE_MARGIN'] = df_full_time['SCORE_HOME'] - df_full_time['SCORE_AWAY']
+    #df_full_time['SCORE_MARGIN'] = df_full_time['SCORE_HOME'] - df_full_time['SCORE_AWAY']
     return df_full_time
 
 if __name__ == "__main__":
-    npw = NBAPotentialWell('Chicago Bulls','2023-24')
+    npw = NBAPotentialWell('Chicago Bulls','2022-23')
     games = npw._get_game_ids()
     g = NBAGameProcessing(games[0])
     g.create_transition_matrix(lag=20)
