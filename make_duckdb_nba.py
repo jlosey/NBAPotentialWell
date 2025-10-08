@@ -14,20 +14,20 @@ else:
     print("No season provided, using default 2022-23")
     season = '2022-23'
 
-nba22 = NBA_Season(season=season)
+nba_season = NBA_Season(season=season)
 
-teams = nba22._get_teams()
+teams = nba_season._get_teams()
 
 
 con = duckdb.connect(database='nba.db', read_only=False)
 #con.execute('CREATE SEQUENCE IF NOT EXISTS season_seq START 1;')
 # Create the seasons table if it doesn't exist and populate with season provided
 con.execute("CREATE TABLE IF NOT EXISTS seasons (ID INTEGER PRIMARY KEY, season VARCHAR, season_type VARCHAR)")
-if con.execute("SHOW TABLES").fetchall()[0] == 0:
-    con.execute("INSERT INTO seasons VALUES (?, ?, ?)", (int('2'+nba22.season[:4]),nba22.season, nba22.season_type))
+if nba_season.season not in con.execute("SELECT season FROM seasons;").fetchall()[0]:
+    con.execute("INSERT INTO seasons VALUES (?, ?, ?)", (int('2'+nba_season.season[:4]),nba_season.season, nba_season.season_type))
 else:
     print("Season already exists in the database, skipping insert.")
-#con.execute("INSERT INTO seasons VALUES (?, ?)", (nba22.season, nba22.season_type))
+#con.execute("INSERT INTO seasons VALUES (?, ?)", (nba_season.season, nba_season.season_type))
 
 # Create the teams table if it doesn't exist and populate with teams
 con.execute("CREATE TABLE IF NOT EXISTS teams (TEAM_ID INTEGER PRIMARY KEY, FULL_NAME VARCHAR, ABBR VARCHAR, NICKNAME VARCHAR, CITY VARCHAR, STATE VARCHAR)")
@@ -51,13 +51,16 @@ con.execute("""CREATE TABLE IF NOT EXISTS games (GAME_ID INTEGER PRIMARY KEY,
             MIN_HOME VARCHAR, 
             MIN_AWAY VARCHAR)
             """)
-#for gid in nba22.game_ids:
+#for gid in nba_season.game_ids:
 games = leaguegamefinder.LeagueGameFinder(#team_id_nullable=gid,
-                        season_nullable=nba22.season,
-                        season_type_nullable=nba22.season_type)
+                        season_nullable=nba_season.season,
+                        season_type_nullable=nba_season.season_type)
 games_data = games.get_data_frames()[0]
-home_data = games_data.loc[games_data['MATCHUP'].str.contains('vs'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
-away_data = games_data.loc[games_data['MATCHUP'].str.contains('@'), ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
+print(games_data['MATCHUP'].str.contains('vs'))
+home_data = games_data.loc[games_data['MATCHUP'].str.contains('vs')
+                           , ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
+away_data = games_data.loc[games_data['MATCHUP'].str.contains('@')
+                           , ['SEASON_ID', 'GAME_ID', 'TEAM_ID', 'GAME_DATE', 'MATCHUP', 'PTS','MIN']]
 merged_data = pd.merge(right=home_data, left=away_data, right_on='GAME_ID', left_on='GAME_ID', suffixes=('_HOME', '_AWAY'))
 for n,row in merged_data.iterrows():
     try :

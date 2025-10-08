@@ -66,16 +66,21 @@ class NBAGameProcessing():
         np.add.at(self.mat,(margin,margin_shift),1)
 
         
-    def plot_score_margin(self):
+    def plot_score_margin(self,fig=None):
         """Plot the score margin over time"""
         # This method would implement the logic to plot the score margin.
         # For example, using matplotlib to visualize the score margin over time.
-        plt.plot(self.pbp.index, self.pbp['SCOREMARGIN'])
-        plt.xlabel('Time (seconds)')
-        plt.ylabel('Score Margin')
-        plt.ylim(-30,30)
-        plt.title('Score Margin Over Time')
-        plt.show()
+        if not fig:
+            fig = plt.figure(figsize=(6,4))
+        ax = fig.subplots()
+        ax.plot(self.pbp.index, self.pbp['SCOREMARGIN'])
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Score Margin')
+        ax.set_ylim(-30,30)
+        ax.set_title('Score Margin Over Time')
+        #plt.show()
+        return ax
+        
     
     def plot_transition_matrix(self):
         """Plot the transition matrix"""
@@ -83,7 +88,7 @@ class NBAGameProcessing():
         # For example, using matplotlib or seaborn to visualize the matrix.
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        m = ax.imshow(self.mat, cmap='hot_r')
+        m = ax.pcolormesh(self.mat, cmap='hot_r')
         cbar = plt.colorbar(m)
         ticks = ax.get_xticks()
         ax.set_xticks(ticks)
