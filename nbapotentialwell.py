@@ -25,8 +25,15 @@ class NBAPotentialWell:
     def _get_game_ids(self):
         games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
                             season_nullable=self.season,
-                            season_type_nullable=SeasonType.regular)
-        return [g ['GAME_ID'] for g in games.get_normalized_dict()['LeagueGameFinderResults']]  
+                            season_type_nullable=SeasonType.regular)        
+        return {g['GAME_DATE'] + " - " + g['MATCHUP']:g['GAME_ID']
+                for g in games.get_normalized_dict()['LeagueGameFinderResults']}
+        
+    def _get_game_str(self):
+        games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
+                            season_nullable=self.season,
+                            season_type_nullable=SeasonType.regular)        
+        return [g['GAME_DATE'] + " - " + g['MATCHUP'] for g in games.get_normalized_dict()['LeagueGameFinderResults']]  
         
     def _format_time(self):
         """Convert a time string in the format 'MM:SS' to seconds accounting for the period"""
