@@ -20,14 +20,27 @@ class NBAPotentialWell:
         self.team_id = nba_teams.loc[nba_teams['team_name'] == team_name, 'team_id'].values[0]
         # Consider and assertion for season here
         self.season = season
+        self.season_id = self._get_season_id()
         self.game_ids = self._get_game_ids()
+
+    def _get_season_id(self):
+        """
+        Get the season id from the label formatted like
+        '2023-24'
+        """
+        season_ids = con.execute(f"""SELECT season_id
+                                    FROM dim_seasons
+                                    WHERE season_label = '{self.season}';
+                                    """
+                                ).df()
+        return season_ids['season_id'].values
     
     def _get_game_ids(self):
-        games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
-                            season_nullable=self.season,
-                            season_type_nullable=SeasonType.regular)        
+        #games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
+        #                    season_nullable=self.season,
+        #                    season_type_nullable=SeasonType.regular)        
         games = con.execute(f"""SELECT * FROM dim_games 
-                                WHERE season_id = {self.season}
+                                WHERE season_id in ({",".join(self.season_id.astype(str))})
                                 AND (home_team_id = {self.team_id} or away_team_id = {self.team_id})
                                 """).df()
         #return {g['GAME_DATE'] + " - " + g['MATCHUP']:g['GAME_ID']
@@ -52,7 +65,7 @@ class NBAPotentialWell:
 
 class NBAGameProcessing():
     def __init__(self, game_id,max_differential=30,lag=30):
-        self.game_id = int(game_id)
+        self.game_id = game_id  
         self.pbp = self._get_play_by_play()
         self.max_differential = max_differential
         self.bins = np.arange(-max_differential, max_differential + 1, 1)
@@ -61,10 +74,14 @@ class NBAGameProcessing():
     
     def _get_play_by_play(self,format=True):
         """Loop through all plays in a game and return a list of plays"""
-        pbp = con.execute("SELECT PERIOD, PCTIMESTRING, SCORE, SCOREMARGIN, EVENTMSGTYPE FROM play_by_play WHERE GAME_ID = ?"
+        pbp = con.execute("SELECT PERIOD, PCTIMESTRING, SCORE FROM fact_play_by_play WHERE GAME_ID = ?"
                           , [self.game_id]).df()
-        score_id = pbp['EVENTMSGTYPE'].isin([1,3]) # 1 for field goals, 3 for free throws
-        return _format_time(pbp.loc[score_id, ['PERIOD', 'PCTIMESTRING', 'SCORE', 'SCOREMARGIN']].reset_index(drop=True))   
+        #score_id = pbp['EVENTMSGTYPE'].isin([1,3]) # 1 for field goals, 3 for free throws
+        split = pbp['SCORE'].str.split('-',expand=True)
+        pbp['SCORE_HOME'] = split[0].astype(int)
+        pbp['SCORE_AWAY'] = split[1].astype(int)
+        pbp['SCOREMARGIN'] = pbp['SCORE_HOME'] - pbp['SCORE_AWAY']
+        return _format_time(pbp.loc[:, ['PERIOD', 'PCTIMESTRING', 'SCORE_HOME', 'SCORE_AWAY', 'SCOREMARGIN']].reset_index(drop=True))   
 
     
     def create_transition_matrix(self,lag=30):
@@ -73,7 +90,7 @@ class NBAGameProcessing():
         # based on the play-by-play data.
         df = self.pbp.copy()
         lag_int = int(lag/0.1)  # Convert lag from seconds to number of rows
-        margin = df['SCOREMARGIN'].astype(int).values[0:-lag_int] + self.max_differential
+        margin = df['SCOREMARGIN'].values[0:-lag_int].astype(int) + self.max_differential
         margin_shift = df['SCOREMARGIN'].astype(int).values[lag_int:] + self.max_differential
         np.add.at(self.mat,(margin,margin_shift),1)
 
@@ -90,7 +107,7 @@ class NBAGameProcessing():
         ax.set_ylabel('Score Margin')
         ax.set_ylim(-30,30)
         ax.set_title('Score Margin Over Time')
-        #plt.show()
+        plt.show()
         return ax
         
     
@@ -118,16 +135,17 @@ def _format_time(df):
         - pd.to_timedelta('00:' + df.loc[:,'PCTIMESTRING']) 
     df.loc[:,'TIME_S'] = df.loc[:,'TIME_ELAPSED'].dt.total_seconds()
     df_full_time = pd.DataFrame(data=np.arange(0,2880,0.1),columns=['TIME_S'])
-    df_full_time = df_full_time.set_index('TIME_S').join(df[['TIME_S','SCORE','SCOREMARGIN']].set_index('TIME_S'),how='left',lsuffix='_FULL',rsuffix='')
-    df_full_time.loc[0,['SCORE']] = '0 - 0'
+    df_full_time = df_full_time.set_index('TIME_S').join(df[['TIME_S','SCORE_HOME','SCORE_AWAY','SCOREMARGIN']].set_index('TIME_S'),how='left',lsuffix='_FULL',rsuffix='')
+    df_full_time.loc[0,['SCORE_HOME']] = 0
+    df_full_time.loc[0,['SCORE_HOME']] = 0
     df_full_time.loc[0,['SCOREMARGIN']] = 0
     df_full_time = df_full_time.ffill()
-    df_full_time['SCORE_HOME'] = df_full_time['SCORE'].str.split(" - ").str[1].astype(int)
-    df_full_time['SCORE_AWAY'] = df_full_time['SCORE'].str.split(" - ").str[0].astype(int)
+    #df_full_time['SCORE_HOME'] = df_full_time['SCORE'].str.split(" - ").str[1].astype(int)
+    #df_full_time['SCORE_AWAY'] = df_full_time['SCORE'].str.split(" - ").str[0].astype(int)
     return df_full_time
 
 if __name__ == "__main__":
-    npw = NBAPotentialWell('Chicago Bulls','2022-23')
+    npw = NBAPotentialWell('Chicago Bulls','2023-24')
     games = npw._get_game_ids()
     g = NBAGameProcessing(games.iloc[81])
     g.create_transition_matrix(lag=20)
