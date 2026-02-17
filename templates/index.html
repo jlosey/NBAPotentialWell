@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBA Game Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .filters {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+        
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .filter-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .filter-group select:hover {
+            border-color: #667eea;
+        }
+        
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .games-container {
+            padding: 30px;
+        }
+        
+        .games-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .games-header h2 {
+            color: #333;
+            font-size: 1.5em;
+        }
+        
+        .game-count {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .games-list {
+            display: grid;
+            gap: 12px;
+        }
+        
+        .game-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .game-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .game-info {
+            flex: 1;
+        }
+        
+        .game-date {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 4px;
+        }
+        
+        .game-matchup {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .game-season {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e9ecef;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .no-games {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .no-games h3 {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 20px 30px;
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+        
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+        
+        .close:hover {
+            opacity: 0.8;
+        }
+        
+        .modal-body {
+            padding: 30px;
+            overflow-y: auto;
+            max-height: calc(90vh - 80px);
+        }
+        
+        .plot-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .loading-plot {
+            padding: 60px;
+            text-align: center;
+            color: #6c757d;
+        }
+        
+        .loading-plot::after {
+            content: '';
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e9ecef;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+        }
+
+        /* Navigation styles */
+        .plot-navigation {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .plot-nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .nav-btn {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-btn:disabled {
+            background: #dee2e6;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .plot-image-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .plot-image-wrapper img {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .game-nav-counter {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+
+        .final-score {
+            background: rgba(255,255,255,0.3);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 700;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .keyboard-hint {
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.85em;
+            margin-top: 16px;
+            font-style: italic;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .plot-nav-buttons {
+                flex-direction: column;
+            }
+
+            .nav-btn {
+                width: 100%;
+            }
+        }
+
+        /* Expanded plot overlay */
+        .expanded-plot-overlay {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            animation: fadeIn 0.3s;
+        }
+
+        .expanded-plot-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+        }
+
+        .expanded-plot-container img {
+            max-width: 95%;
+            max-height: 85vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            cursor: zoom-out;
+        }
+
+        .expanded-plot-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 2001;
+            transition: opacity 0.2s;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .expanded-plot-close:hover {
+            opacity: 0.7;
+        }
+
+        .expanded-plot-hint {
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 20px;
+            font-size: 0.9em;
+            font-style: italic;
+        }
+
+        .plot-image-wrapper img {
+            cursor: zoom-in;
+            transition: opacity 0.2s;
+        }
+
+        .plot-image-wrapper img:hover {
+            opacity: 0.9;
+        }
+
+        /* Zoom animation for plot */
+        @keyframes zoomIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .expanded-plot-container img {
+            animation: zoomIn 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏀 NBA Game Viewer</h1>
+            <p>Browse games by season and team</p>
+        </header>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label for="season-select">Season</label>
+                <select id="season-select">
+                    <option value="">All Seasons</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="team-select">Team</label>
+                <select id="team-select">
+                    <option value="">All Teams</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="loadGames()">Load Games</button>
+        </div>
+        
+        <div class="games-container">
+            <div class="games-header">
+                <h2>Games</h2>
+                <span class="game-count" id="game-count">0 games</span>
+            </div>
+            <div id="games-list" class="games-list">
+                <div class="no-games">
+                    <h3>Select filters and click "Load Games"</h3>
+                    <p>Choose a season and/or team to see the games</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for game details and plot -->
+    <div id="gameModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Game Details</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="plotContainer" class="plot-container">
+                    <div class="loading-plot">Loading plot...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expanded plot overlay -->
+    <div id="expandedPlotOverlay" class="expanded-plot-overlay" onclick="closeExpandedPlot(event)">
+        <span class="expanded-plot-close" onclick="closeExpandedPlot()">&times;</span>
+        <div class="expanded-plot-container">
+            <img id="expandedPlotImage" src="" alt="Expanded game plot">
+            <div class="expanded-plot-hint">Click anywhere or press Escape to close</div>
+        </div>
+    </div>
+
+    <script>
+        // Store games list and current game index for navigation
+        let currentGames = [];
+        let currentGameIndex = -1;
+        let currentExpandedGameId = null;
+        let isPlotExpanded = false;
+
+        // Load dropdown options on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSeasons();
+            loadTeams();
+
+            // Keyboard navigation support
+            document.addEventListener('keydown', function(e) {
+                // Handle expanded plot first (highest priority)
+                if (isPlotExpanded) {
+                    if (e.key === 'Escape') {
+                        closeExpandedPlot();
+                    }
+                    return;
+                }
+
+                // Handle game modal navigation
+                const modal = document.getElementById('gameModal');
+                if (modal.style.display === 'block') {
+                    if (e.key === 'ArrowLeft') showPreviousGame();
+                    if (e.key === 'ArrowRight') showNextGame();
+                    if (e.key === 'Escape') closeModal();
+                }
+            });
+        });
+
+        // Load seasons dropdown
+        async function loadSeasons() {
+            try {
+                const response = await fetch('/api/seasons');
+                const seasons = await response.json();
+                const select = document.getElementById('season-select');
+                
+                seasons.forEach(season => {
+                    const option = document.createElement('option');
+                    option.value = season;
+                    option.textContent = season;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading seasons:', error);
+            }
+        }
+
+        // Load teams dropdown
+        async function loadTeams() {
+            try {
+                const response = await fetch('/api/teams');
+                const teams = await response.json();
+                const select = document.getElementById('team-select');
+                
+                teams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = team;
+                    option.textContent = team;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading teams:', error);
+            }
+        }
+
+        // Load games based on selected filters
+        async function loadGames() {
+            const season = document.getElementById('season-select').value;
+            const team = document.getElementById('team-select').value;
+            const gamesList = document.getElementById('games-list');
+            const gameCount = document.getElementById('game-count');
+            
+            // Show loading state
+            gamesList.innerHTML = '<div class="loading">Loading games...</div>';
+            
+            try {
+                // Build query string
+                const params = new URLSearchParams();
+                if (season) params.append('season', season);
+                if (team) params.append('team', team);
+                
+                const response = await fetch(`/api/games?${params}`);
+                const games = await response.json();
+                
+                // Update game count
+                gameCount.textContent = `${games.length} game${games.length !== 1 ? 's' : ''}`;
+                
+                // Clear and populate games list
+                gamesList.innerHTML = '';
+                
+                if (games.length === 0) {
+                    gamesList.innerHTML = `
+                        <div class="no-games">
+                            <h3>No games found</h3>
+                            <p>Try selecting different filters</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Store games for navigation
+                currentGames = games;
+
+                games.forEach(game => {
+                    const gameCard = document.createElement('div');
+                    gameCard.className = 'game-card';
+                    gameCard.innerHTML = `
+                        <div class="game-info">
+                            <div class="game-date">${formatDate(game.game_date)}</div>
+                            <div class="game-matchup">${game.matchup || game.away_team + ' @ ' + game.home_team}</div>
+                        </div>
+                        <span class="game-season">${game.season}</span>
+                    `;
+                    gameCard.onclick = () => showGameDetails(game.game_id);
+                    gamesList.appendChild(gameCard);
+                });
+                
+            } catch (error) {
+                gamesList.innerHTML = `
+                    <div class="error">
+                        Error loading games: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Format date for display
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        // Show game details with plot
+        async function showGameDetails(gameId) {
+            const modal = document.getElementById('gameModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const plotContainer = document.getElementById('plotContainer');
+
+            // Set current game index
+            currentGameIndex = currentGames.findIndex(g => g.game_id === gameId);
+
+            // Show modal with loading state
+            modal.style.display = 'block';
+            modalTitle.innerHTML = 'Loading Game Details...';
+            plotContainer.innerHTML = '<div class="loading-plot">Generating score plot...</div>';
+            
+            try {
+                // Fetch game details
+                const response = await fetch(`/api/game/${gameId}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    plotContainer.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                    return;
+                }
+
+                // Store current game ID for expanded view
+                currentExpandedGameId = gameId;
+
+                // Get final score from play-by-play data (last entry with score)
+                let finalScore = '';
+                if (data.play_by_play && data.play_by_play.length > 0) {
+                    for (let i = data.play_by_play.length - 1; i >= 0; i--) {
+                        const play = data.play_by_play[i];
+                        if (play.score && play.score.includes('-')) {
+                            finalScore = play.score;
+                            break;
+                        }
+                    }
+                }
+
+                // Update title with game counter and final score
+                const game = data.game;
+                const navInfo = `<span class="game-nav-counter">${currentGameIndex + 1} / ${currentGames.length}</span>`;
+                const scoreInfo = finalScore ? `<span class="final-score">${finalScore}</span>` : '';
+                modalTitle.innerHTML = `${game.away_team} @ ${game.home_team} - ${formatDate(game.game_date)} ${scoreInfo} ${navInfo}`;
+
+                // Load the plot image with navigation buttons below
+                plotContainer.innerHTML = `
+                    <div class="plot-navigation">
+                        <div class="plot-image-wrapper">
+                            <img src="/api/game/${gameId}/plot" alt="Score plot" onclick="expandPlot()" title="Click to expand">
+                        </div>
+                        <div class="plot-nav-buttons">
+                            <button class="nav-btn" id="prevBtn" onclick="showPreviousGame()" title="Previous Game (←)">
+                                ← Previous
+                            </button>
+                            <button class="nav-btn" id="nextBtn" onclick="showNextGame()" title="Next Game (→)">
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                    <div class="keyboard-hint">Use ← → arrow keys or buttons to navigate • Click plot to expand</div>
+                `;
+
+                // Update button states
+                updateNavButtons();
+                
+            } catch (error) {
+                plotContainer.innerHTML = `<div class="error">Error loading game details: ${error.message}</div>`;
+            }
+        }
+        
+        // Update navigation button states (disable at boundaries)
+        function updateNavButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            if (prevBtn) {
+                prevBtn.disabled = currentGameIndex <= 0;
+                prevBtn.style.opacity = currentGameIndex <= 0 ? '0.3' : '1';
+                prevBtn.style.cursor = currentGameIndex <= 0 ? 'not-allowed' : 'pointer';
+            }
+            if (nextBtn) {
+                nextBtn.disabled = currentGameIndex >= currentGames.length - 1;
+                nextBtn.style.opacity = currentGameIndex >= currentGames.length - 1 ? '0.3' : '1';
+                nextBtn.style.cursor = currentGameIndex >= currentGames.length - 1 ? 'not-allowed' : 'pointer';
+            }
+        }
+
+        // Expand plot to full screen
+        function expandPlot() {
+            if (!currentExpandedGameId) return;
+
+            const overlay = document.getElementById('expandedPlotOverlay');
+            const img = document.getElementById('expandedPlotImage');
+
+            img.src = `/api/game/${currentExpandedGameId}/plot`;
+            overlay.style.display = 'block';
+            isPlotExpanded = true;
+        }
+
+        // Close expanded plot
+        function closeExpandedPlot(event) {
+            // If event is passed, only close if clicking the overlay background or close button
+            if (event && event.target !== event.currentTarget && !event.target.classList.contains('expanded-plot-close')) {
+                return;
+            }
+
+            const overlay = document.getElementById('expandedPlotOverlay');
+            overlay.style.display = 'none';
+            isPlotExpanded = false;
+        }
+
+        // Show previous game
+        function showPreviousGame() {
+            if (isPlotExpanded) {
+                closeExpandedPlot();
+            }
+            if (currentGameIndex > 0 && currentGames.length > 0) {
+                currentGameIndex--;
+                showGameDetails(currentGames[currentGameIndex].game_id);
+            }
+        }
+
+        // Show next game
+        function showNextGame() {
+            if (isPlotExpanded) {
+                closeExpandedPlot();
+            }
+            if (currentGameIndex < currentGames.length - 1 && currentGames.length > 0) {
+                currentGameIndex++;
+                showGameDetails(currentGames[currentGameIndex].game_id);
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('gameModal').style.display = 'none';
+            currentGameIndex = -1;
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('gameModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+                currentGameIndex = -1;
+            }
+        }
+    </script>
+</body>
+</html>

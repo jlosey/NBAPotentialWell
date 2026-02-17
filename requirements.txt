@@ -1,8 +1,8 @@
-python=3.11
 pandas
 polars
+duckdb
 numpy
 scipy
 scikit-learn
 matplotlib
-pip install nba_api
+uv pip install nba_api

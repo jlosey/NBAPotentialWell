@@ -1,5 +1,5 @@
 #Classes and methods to pull NBA play-by-play data
-#conver it to a Markov transition matrix
+#convert it to a Markov transition matrix
 #and estimate potential energy wells
 import numpy as np
 import pandas as pd
@@ -10,14 +10,14 @@ from nba_api.stats.library.parameters import SeasonType
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import playbyplay
 import duckdb
-con = duckdb.connect(database='nba.db', read_only=False)
-nba_teams = con.execute("SELECT * FROM teams;").df()
+con = duckdb.connect(database='nba_bbr_normalized.db', read_only=False)
+nba_teams = con.execute("SELECT * FROM dim_teams;").df()
 
 class NBAPotentialWell:
     def __init__(self,team_name,season):
-        assert nba_teams['FULL_NAME'].str.fullmatch(team_name).any(), "Team not found in database"
+        assert nba_teams['team_name'].str.fullmatch(team_name).any(), "Team not found in database"
         self.team_name = team_name
-        self.team_id = nba_teams.loc[nba_teams['FULL_NAME'] == team_name, 'TEAM_ID'].values[0]
+        self.team_id = nba_teams.loc[nba_teams['team_name'] == team_name, 'team_id'].values[0]
         # Consider and assertion for season here
         self.season = season
         self.game_ids = self._get_game_ids()
@@ -26,8 +26,13 @@ class NBAPotentialWell:
         games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
                             season_nullable=self.season,
                             season_type_nullable=SeasonType.regular)        
-        return {g['GAME_DATE'] + " - " + g['MATCHUP']:g['GAME_ID']
-                for g in games.get_normalized_dict()['LeagueGameFinderResults']}
+        games = con.execute(f"""SELECT * FROM dim_games 
+                                WHERE season_id = {self.season}
+                                AND (home_team_id = {self.team_id} or away_team_id = {self.team_id})
+                                """).df()
+        #return {g['GAME_DATE'] + " - " + g['MATCHUP']:g['GAME_ID']
+        #        for g in games.get_normalized_dict()['LeagueGameFinderResults']}
+        return games['game_id']
         
     def _get_game_str(self):
         games = leaguegamefinder.LeagueGameFinder(team_id_nullable=self.team_id,
@@ -124,7 +129,7 @@ def _format_time(df):
 if __name__ == "__main__":
     npw = NBAPotentialWell('Chicago Bulls','2022-23')
     games = npw._get_game_ids()
-    g = NBAGameProcessing(games[81])
+    g = NBAGameProcessing(games.iloc[81])
     g.create_transition_matrix(lag=20)
     g.plot_score_margin()
     g.plot_transition_matrix()
