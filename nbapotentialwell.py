@@ -10,6 +10,8 @@ from nba_api.stats.library.parameters import SeasonType
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import playbyplay
 import duckdb
+from bokeh.plotting import figure, show
+from bokeh.palettes import RdGy 
 con = duckdb.connect(database='nba_bbr_normalized.db', read_only=False)
 nba_teams = con.execute("SELECT * FROM dim_teams;").df()
 
@@ -109,7 +111,17 @@ class NBAGameProcessing():
         ax.set_title('Score Margin Over Time')
         plt.show()
         return ax
-        
+
+    def bokeh_score_margin(self):
+        p = figure(title="Score Margin", x_axis_label='x', y_axis_label='y')
+        p.line(self.pbp.index, self.pbp['SCOREMARGIN'], legend_label='Score Margin')
+        return p
+
+    def bokeh_transition_matrix(self):
+        p = figure(title="Transition Matrix", x_axis_label='x', y_axis_label='y')
+        p.image([self.mat],x=-30,y=-30,dw=60,dh=60,palette=RdGy[11])
+        #p.xaxis.ticker=np.linspace(-30,30,self.mat.shape[0])
+        return p
     
     def plot_transition_matrix(self):
         """Plot the transition matrix"""
@@ -149,6 +161,11 @@ if __name__ == "__main__":
     games = npw._get_game_ids()
     g = NBAGameProcessing(games.iloc[81])
     g.create_transition_matrix(lag=20)
-    g.plot_score_margin()
-    g.plot_transition_matrix()
+    #g.plot_score_margin()
+    #p = g.bokeh_score_margin()
+    #print(p)
+    #show(p)
+    #g.plot_transition_matrix()
+    m = g.bokeh_transition_matrix()
+    show(m)
     #print(np.sum(g.mat,axis=0))

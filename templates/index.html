@@ -396,6 +396,74 @@
             vertical-align: middle;
         }
 
+        /* Plot tabs */
+        .plot-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 12px;
+        }
+
+        .plot-tab {
+            padding: 8px 20px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+
+        .plot-tab:hover {
+            background: #e9ecef;
+        }
+
+        .plot-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Autocorrelation controls */
+        .autocorr-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .autocorr-controls label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .autocorr-controls input[type="number"] {
+            width: 80px;
+            padding: 8px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 1em;
+            text-align: center;
+        }
+
+        .autocorr-controls input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .autocorr-controls .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+
         .keyboard-hint {
             text-align: center;
             color: #6c757d;
@@ -738,19 +806,25 @@
                 const scoreInfo = finalScore ? `<span class="final-score">${finalScore}</span>` : '';
                 modalTitle.innerHTML = `${game.away_team} @ ${game.home_team} - ${formatDate(game.game_date)} ${scoreInfo} ${navInfo}`;
 
-                // Load the plot image with navigation buttons below
+                // Load the plot image with tabs and navigation buttons below
                 plotContainer.innerHTML = `
-                    <div class="plot-navigation">
-                        <div class="plot-image-wrapper">
-                            <img src="/api/game/${gameId}/plot" alt="Score plot" onclick="expandPlot()" title="Click to expand">
-                        </div>
-                        <div class="plot-nav-buttons">
-                            <button class="nav-btn" id="prevBtn" onclick="showPreviousGame()" title="Previous Game (←)">
-                                ← Previous
-                            </button>
-                            <button class="nav-btn" id="nextBtn" onclick="showNextGame()" title="Next Game (→)">
-                                Next →
-                            </button>
+                    <div class="plot-tabs">
+                        <div class="plot-tab active" onclick="switchPlotTab('standard', '${gameId}')" id="tab-standard">Score Timeline</div>
+                        <div class="plot-tab" onclick="switchPlotTab('autocorr', '${gameId}')" id="tab-autocorr">Autocorrelation</div>
+                    </div>
+                    <div id="plot-content">
+                        <div class="plot-navigation">
+                            <div class="plot-image-wrapper">
+                                <img src="/api/game/${gameId}/plot" alt="Score plot" onclick="expandPlot()" title="Click to expand">
+                            </div>
+                            <div class="plot-nav-buttons">
+                                <button class="nav-btn" id="prevBtn" onclick="showPreviousGame()" title="Previous Game (←)">
+                                    ← Previous
+                                </button>
+                                <button class="nav-btn" id="nextBtn" onclick="showNextGame()" title="Next Game (→)">
+                                    Next →
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="keyboard-hint">Use ← → arrow keys or buttons to navigate • Click plot to expand</div>
@@ -787,7 +861,11 @@
             const overlay = document.getElementById('expandedPlotOverlay');
             const img = document.getElementById('expandedPlotImage');
 
-            img.src = `/api/game/${currentExpandedGameId}/plot`;
+            if (currentPlotType === 'autocorr') {
+                img.src = `/api/game/${currentExpandedGameId}/autocorr?lag=${currentAutocorrLag}&t=${Date.now()}`;
+            } else {
+                img.src = `/api/game/${currentExpandedGameId}/plot`;
+            }
             overlay.style.display = 'block';
             isPlotExpanded = true;
         }
@@ -839,6 +917,102 @@
                 modal.style.display = 'none';
                 currentGameIndex = -1;
             }
+        }
+
+        // Current plot type tracker
+        let currentPlotType = 'standard';
+        let currentAutocorrLag = 30;
+
+        // Switch between plot tabs
+        async function switchPlotTab(plotType, gameId) {
+            if (!gameId) {
+                gameId = currentExpandedGameId;
+            }
+            if (!gameId) return;
+
+            currentPlotType = plotType;
+
+            // Update tab styling
+            document.querySelectorAll('.plot-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(`tab-${plotType}`).classList.add('active');
+
+            const plotContent = document.getElementById('plot-content');
+
+            if (plotType === 'standard') {
+                // Show standard plot
+                plotContent.innerHTML = `
+                    <div class="plot-navigation">
+                        <div class="plot-image-wrapper">
+                            <img src="/api/game/${gameId}/plot" alt="Score plot" onclick="expandPlot()" title="Click to expand">
+                        </div>
+                        <div class="plot-nav-buttons">
+                            <button class="nav-btn" id="prevBtn" onclick="showPreviousGame()" title="Previous Game (←)">
+                                ← Previous
+                            </button>
+                            <button class="nav-btn" id="nextBtn" onclick="showNextGame()" title="Next Game (→)">
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                `;
+                currentExpandedGameId = gameId;
+            } else if (plotType === 'autocorr') {
+                // Show autocorrelation plot with controls
+                plotContent.innerHTML = `
+                    <div class="autocorr-controls">
+                        <label for="lag-input">Max Lag (seconds):</label>
+                        <input type="number" id="lag-input" value="${currentAutocorrLag}" min="1" max="100" onchange="updateAutocorrLag(this.value, '${gameId}')">
+                        <button class="btn btn-small" onclick="updateAutocorrLag(document.getElementById('lag-input').value, '${gameId}')">Update</button>
+                    </div>
+                    <div class="plot-navigation">
+                        <div class="plot-image-wrapper">
+                            <img id="autocorr-img" src="/api/game/${gameId}/autocorr?lag=${currentAutocorrLag}" alt="Autocorrelation plot" onclick="expandAutocorrPlot()" title="Click to expand">
+                        </div>
+                        <div class="plot-nav-buttons">
+                            <button class="nav-btn" id="prevBtn" onclick="showPreviousGame()" title="Previous Game (←)">
+                                ← Previous
+                            </button>
+                            <button class="nav-btn" id="nextBtn" onclick="showNextGame()" title="Next Game (→)">
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            updateNavButtons();
+        }
+
+        // Update autocorrelation lag
+        async function updateAutocorrLag(lag, gameId) {
+            lag = parseInt(lag);
+            if (isNaN(lag) || lag < 1 || lag > 100) {
+                alert('Lag must be between 1 and 100 seconds');
+                return;
+            }
+            currentAutocorrLag = lag;
+
+            // Update the image with a loading state
+            const img = document.getElementById('autocorr-img');
+            if (img) {
+                img.style.opacity = '0.5';
+                img.src = `/api/game/${gameId}/autocorr?lag=${lag}&t=${Date.now()}`;
+                img.onload = () => { img.style.opacity = '1'; };
+            }
+        }
+
+        // Expand autocorrelation plot
+        function expandAutocorrPlot() {
+            if (!currentExpandedGameId) return;
+
+            const overlay = document.getElementById('expandedPlotOverlay');
+            const img = document.getElementById('expandedPlotImage');
+
+            img.src = `/api/game/${currentExpandedGameId}/autocorr?lag=${currentAutocorrLag}&t=${Date.now()}`;
+            overlay.style.display = 'block';
+            isPlotExpanded = true;
         }
     </script>
 </body>
