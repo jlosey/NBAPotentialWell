@@ -13,7 +13,7 @@ import base64
 import logging
 import numpy as np
 
-from nbapotentialwell import NBAGameProcessing
+#from nbapotentialwell import NBAGameProcessing
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
